@@ -1,0 +1,54 @@
+
+body { 
+	margin: 0; 
+	overflow: hidden; 
+	background-color: #050505; 
+	font-family: 'Courier New', monospace; 
+}
+
+/* HUD / Control Panel */
+#ui-container {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    padding: 15px;
+    background: rgba(20, 20, 30, 0.8);
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: white;
+    z-index: 10;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-right: 1px solid #555;
+    padding-right: 15px;
+}
+.control-group:last-child { border-right: none; }
+
+button {
+    background: #222;
+    color: #00ffcc;
+    border: 1px solid #00ffcc;
+    padding: 8px 15px;
+    margin: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+button:hover { background: #00ffcc; color: #000; }
+button:disabled { border-color: #555; color: #555; cursor: not-allowed; }
+
+#info-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #00ffcc;
+    pointer-events: none;
+}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trapped Ion Quantum Simulator</title>
+    
+    <!-- Import Three.js from CDN -->
+    
+  <script type="module" crossorigin src="/assets/index-Be05C8fe.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CE7OI7Uv.css">
+</head>
+<body>
+    <!-- Information Overlay -->
+    <div id="info-panel">
+        <h1>Trapped Ion Sim</h1>
+        <p>Status: <span id="system-status">Idle</span></p>
+        <p>Selected Ion: <span id="selected-ion-id">None</span></p>
+        <small>Click ions to select them</small>
+    </div>
+
+    <!-- Controls -->
+    <div id="ui-container">
+        <div class="control-group">
+            <small>Single Qubit</small>
+            <button id="btn-cool" onclick="app.coolIons()">Doppler Cool (Reset)</button>
+            <button id="btn-excite" onclick="app.pulseLaser('pi')">π Pulse (X Gate)</button>
+            <button id="btn-super" onclick="app.pulseLaser('half-pi')">π/2 Pulse (H Gate)</button>
+        </div>
+        <div class="control-group">
+            <small>Two Qubit</small>
+            <button id="btn-entangle" onclick="app.entangleIons()">Entangle (XX Gate)</button>
+        </div>
+    </div>
+
+</body>
+</html>
