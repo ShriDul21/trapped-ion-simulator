@@ -1,5 +1,6 @@
 
 import * as THREE from 'three';
+import gsap from 'gsap';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -10,12 +11,23 @@ class IonSimulator {
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
+
+        
         
         this.ions = []; // Stores ion meshes and state
         this.lasers = []; // Stores active laser beam meshes
         this.selectedIonIndex = -1;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
+
+        this.selectedIndices = new Set(); // Replaces selectedIonIndex
+        this.isEntangling = false; // Flag to control animation mode
+        const zero = "0".repeat(5);
+
+        this.globalState = {
+            [zero]: 1  // amplitude 1 for |00...0>
+        };
+
 
         this.init();
         this.createTrap();
@@ -37,6 +49,7 @@ class IonSimulator {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
 
+
         // Lighting
         const ambientLight = new THREE.AmbientLight(0x404040);
         this.scene.add(ambientLight);
@@ -57,20 +70,71 @@ class IonSimulator {
             roughness: 0.2 
         });
         
-        // Create 4 rods (Quadrupole design)
-        const rodGeo = new THREE.CylinderGeometry(0.2, 0.2, 12, 32);
-        rodGeo.rotateZ(Math.PI / 2); // Lay flat along X
+        // Create 4 rods with triangular cross-section
+        const rodLength = 12;
+        const rodRadius = 0.2;
+        
+        // Create triangular prism geometry
+        const shape = new THREE.Shape();
+        const triRadius = rodRadius * 1.5; // Make it a bit larger since it's triangular
+        for (let i = 0; i < 3; i++) {
+            const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
+            const x = Math.cos(angle) * triRadius;
+            const y = Math.sin(angle) * triRadius;
+            if (i === 0) shape.moveTo(x, y);
+            else shape.lineTo(x, y);
+        }
+        shape.closePath();
+        
+        const extrudeSettings = {
+            depth: rodLength,
+            bevelEnabled: false
+        };
+        
+        const rodGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        // Center the geometry and rotate to lay along X-axis
+        rodGeo.translate(0, 0, -rodLength / 2);
+        rodGeo.rotateY(Math.PI / 2);
 
         const positions = [
             [0, 1.5, 1.5], [0, 1.5, -1.5],
             [0, -1.5, 1.5], [0, -1.5, -1.5]
         ];
 
-        positions.forEach(pos => {
+        positions.forEach((pos, idx) => {
             const rod = new THREE.Mesh(rodGeo, electrodeMat);
             rod.position.set(...pos);
+            // Rotate each rod to point inward
+            rod.rotateX(idx * Math.PI / 2);
             this.scene.add(rod);
         });
+
+        
+        // Add hemispherical end caps
+        const capRadius = 1.5; // Smaller radius
+        const capGeo = new THREE.SphereGeometry(capRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const capMat = new THREE.MeshStandardMaterial({
+            color: 0x4488ff,
+            metalness: 0.6,
+            roughness: 0.3,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide
+        });
+
+        // Left end cap (pointing left/outward)
+        const leftCap = new THREE.Mesh(capGeo, capMat);
+        leftCap.position.x = -rodLength / 2;
+        leftCap.rotation.y = Math.PI ;
+        leftCap.rotation.z = Math.PI/2; // Flip upside down
+        this.scene.add(leftCap);
+
+        // Right end cap (pointing right/outward)
+        const rightCap = new THREE.Mesh(capGeo, capMat);
+        rightCap.position.x = rodLength / 2;
+        rightCap.rotation.y = 0 ;
+        rightCap.rotation.z = Math.PI/2; // Flip upside down
+        this.scene.add(rightCap);
 
         // Add faint grid for reference
         const grid = new THREE.GridHelper(20, 20, 0x333333, 0x111111);
@@ -133,20 +197,41 @@ class IonSimulator {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const intersects = this.raycaster.intersectObjects(this.ions);
 
-        // Deselect all first
-        this.ions.forEach(ion => {
-            ion.userData.isSelected = false;
-            ion.scale.set(1,1,1);
-        });
-        this.selectedIonIndex = -1;
-        document.getElementById('selected-ion-id').innerText = "None";
 
         if (intersects.length > 0) {
-            const hit = intersects[0].object;
-            hit.userData.isSelected = true;
-            hit.scale.set(1.5, 1.5, 1.5); // Visual feedback
-            this.selectedIonIndex = hit.userData.id;
-            document.getElementById('selected-ion-id').innerText = `Ion ${hit.userData.id}`;
+            const hitIon = intersects[0].object;
+            const id = hitIon.userData.id; // Assuming you stored ID here
+
+            // 3. Toggle Selection Logic
+            if (this.selectedIndices.has(id)) {
+                // Deselect
+                this.selectedIndices.delete(id);
+                this.highlightIon(hitIon, false);
+            } else {
+                // Select (limit to 2 if you want to be strict, or allow more)
+                if (this.selectedIndices.size < 2) {
+                    this.selectedIndices.add(id);
+                    this.highlightIon(hitIon, true);
+                } else {
+                    console.log("Only 2 ions can be entangled at a time (for this demo)");
+                }
+            }
+            
+            // Update UI Text
+            const ids = Array.from(this.selectedIndices).sort().join(", ");
+            document.getElementById('selected-ion-id').innerText = ids || "None";
+        }
+    }
+    // Helper to handle visual toggle
+    highlightIon(mesh, isSelected) {
+        if (isSelected) {
+            // Example: Add a glow ring or scale up
+            mesh.scale.set(1.3, 1.3, 1.3);
+            mesh.material.emissiveIntensity = 3; 
+        } else {
+            // Reset
+            mesh.scale.set(1, 1, 1);
+            mesh.material.emissiveIntensity = 1; // Or whatever your default is
         }
     }
 
@@ -163,46 +248,79 @@ class IonSimulator {
             });
             document.getElementById('system-status').innerText = "Idle (Ground State)";
         }, 500);
+        this.selectedIndices.clear();
+        this.updateLatexDisplay();
+
     }
 
     pulseLaser(type) {
-        if (this.selectedIonIndex === -1) {
+        if (this.selectedIndices.size === 0) {
             alert("Select an ion first!");
             return;
         }
+        for(const id of this.selectedIndices) {
+            const ion = this.ions[id];
+            const color = type === 'pi' ? 0xff0000 : 0xff00ff; // Red or Purple
+            
+            // Visualize Laser
+            this.fireLaserBeam(ion.position, color);
 
-        const ion = this.ions[this.selectedIonIndex];
-        const color = type === 'pi' ? 0xff0000 : 0xff00ff; // Red or Purple
-        
-        // Visualize Laser
-        this.fireLaserBeam(ion.position, color);
+            // 2. Show Energy Diagram Overlay
+            this.showEnergyDiagram(ion, type);
 
-        // Update State (Mock Logic)
-        if (type === 'pi') {
-            // Flip state 0 <-> 1
-            ion.userData.state = ion.userData.state === 0 ? 1 : 0;
-        } else if (type === 'half-pi') {
-            // Superposition state (visualized as 0.5)
-            ion.userData.state = 0.5;
+            // Update State (Mock Logic)
+            if (type === 'pi') {
+                // Flip state 0 <-> 1
+                ion.userData.state = ion.userData.state === 0 ? 1 : 0;
+            } else if (type === 'half-pi') {
+                // Superposition state (visualized as 0.5)
+                ion.userData.state = 0.5;
+            }
+            this.updateLatexDisplay();
+            
+            setTimeout(() => {
+                this.updateIonColor(ion);
+            }, 200);
+            this.selectedIndices.delete(id);
+            this.highlightIon(this.ions[id], false);
         }
+
         
-        setTimeout(() => {
-            this.updateIonColor(ion);
-        }, 200);
     }
 
     entangleIons() {
-        // Mock: Entangles selected ion with its right neighbor
-        if (this.selectedIonIndex === -1 || this.selectedIonIndex >= this.ions.length - 1) {
-            alert("Select an ion (except the last one) to entangle with neighbor.");
+        // 1. Validation
+        if (this.selectedIndices.size !== 2) {
+            alert("Please select exactly two ions to entangle.");
             return;
         }
 
-        const ion1 = this.ions[this.selectedIonIndex];
-        const ion2 = this.ions[this.selectedIonIndex + 1];
+        const indices = Array.from(this.selectedIndices);
+        const ionA = this.ions.find(ion => ion.userData.id === indices[0]);
+        const ionB = this.ions.find(ion => ion.userData.id === indices[1]);
 
-        // Visualise entanglement beam between them
-        this.createEntanglementLink(ion1, ion2);
+        // 2. Set State to Entangling
+        this.isEntangling = true;
+
+        // 3. Create the laser visualization (Green beam between them)
+        this.createEntanglementLink(ionA, ionB);
+        // Optional: Change colors to purple to indicate Bell State creation
+        ionA.material.color.setHex(0x39FF14); 
+        ionB.material.color.setHex(0x39FF14);
+        ionA.material.emissive.setHex(0x39FF14);
+        ionB.material.emissive.setHex(0x39FF14); 
+        
+        
+
+        // 4. Stop entangling after a set duration (e.g., 3 seconds)
+        setTimeout(() => {
+            this.isEntangling = false;
+            // Clear selection after op
+            this.selectedIndices.clear();
+            this.highlightIon(ionA, false);
+            this.highlightIon(ionB, false);
+            
+        }, 3000);
     }
 
     updateIonColor(ion) {
@@ -281,18 +399,161 @@ class IonSimulator {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.composer.setSize(window.innerWidth, window.innerHeight);
     }
+    getScreenPosition(mesh) {
+        const vector = new THREE.Vector3();
+        
+        // 1. Get center of mesh
+        mesh.updateMatrixWorld(); // Ensure matrix is up to date
+        vector.setFromMatrixPosition(mesh.matrixWorld);
+        
+        // 2. Add offset so popup is above the ion
+        vector.y += 1.5; 
+
+        // 3. Project to 2D screen space
+        vector.project(this.camera);
+
+        const x = (vector.x * .5 + .5) * window.innerWidth;
+        const y = (-(vector.y * .5) * .5 + .5) * window.innerHeight;
+
+        return { x, y };
+    }
+    showEnergyDiagram(ion, transitionType) {
+        const popup = document.getElementById('energy-popup');
+        const electron = document.getElementById('electron');
+        const ghost = document.getElementById('electron-ghost');
+        
+        // 1. Position the popup
+        const screenPos = this.getScreenPosition(ion);
+        popup.style.left = `${screenPos.x}px`;
+        popup.style.top = `${screenPos.y}px`;
+
+        // 2. Determine Start/End positions (CSS percentages in the .gap container)
+        // 100% is bottom (Ground), 0% is top (Excited)
+        const currentState = ion.userData.state || 0; // Default to 0
+        
+        const startTop = currentState === 0 ? "100%" : "0%";
+        let endTop = "100%"; // Default target
+        
+        // Logic for target
+        if (transitionType === 'pi') {
+            endTop = currentState === 0 ? "0%" : "100%"; // Flip
+        } else if (transitionType === 'half-pi') {
+            endTop = "50%"; // Superposition
+        }
+
+        // 3. Reset Elements
+        gsap.set(popup, { opacity: 1, scale: 0.8 });
+        gsap.set(electron, { top: startTop, scale: 1, backgroundColor: '#ffffff' });
+        gsap.set(ghost, { display: 'none' });
+
+        // 4. Animate Diagram
+        const tl = gsap.timeline();
+
+        // Pop in
+        tl.to(popup, { scale: 1, duration: 0.2, ease: "back.out" });
+
+        if (transitionType === 'pi') {
+            // Simple particle jump
+            tl.to(electron, { top: endTop, duration: 0.5, ease: "power2.inOut" });
+        } 
+        else if (transitionType === 'half-pi') {
+            // Superposition: Split into two or move to middle
+            // Let's move to middle and turn purple
+            tl.to(electron, { 
+                top: "50%", 
+                backgroundColor: "#aa00ff", // Purple
+                boxShadow: "0 0 15px #aa00ff",
+                duration: 0.5 
+            });
+            
+            // Optional: Show "Ghost" particles to represent probability split
+            tl.add(() => {
+                ghost.style.display = 'block';
+                ghost.style.top = "50%";
+            });
+            tl.to([electron, ghost], { 
+                top: (i) => i === 0 ? "20%" : "80%", // Separate slightly
+                opacity: 0.7,
+                duration: 0.3,
+                yoyo: true,
+                repeat: 3
+            });
+        }
+
+        // 5. Fade out after animation
+        tl.to(popup, { opacity: 0, scale: 0.8, duration: 0.3, delay: 0.5 });
+    }
+    updateLatexDisplay() {
+        const span = document.getElementById("state-status");
+
+        // Build latex by reading each ion's state
+        let latex = this.ions.map(ion => {
+            const s = ion.userData.state;
+            if (s === 0) return "|0\\rangle";
+            if (s === 1) return "|1\\rangle";
+            // superposition state
+            if (s === 0.5) return "\\frac{|0\\rangle + |1\\rangle}{\\sqrt{2}}";
+            return "|?\\rangle"; // fallback
+        }).join(" \\otimes ");
+
+        // Write LaTeX into the HTML
+        span.innerHTML = `\\( ${latex} \\)`;
+
+        // Tell MathJax to re-render
+        MathJax.typesetPromise();
+    }
+
 
     animate() {
         requestAnimationFrame(() => this.animate());
 
         const time = performance.now() * 0.001;
 
-        // Idle Animation: Thermal vibration
-        this.ions.forEach((ion, idx) => {
-            // Ions vibrate slightly out of phase
-            ion.position.y = ion.userData.basePosition.y + Math.sin(time * 5 + idx) * 0.05;
-            ion.position.z = ion.userData.basePosition.z + Math.cos(time * 4 + idx) * 0.05;
+        this.ions.forEach((ion) => {
+            const ionId = ion.userData.id;
+            
+            // Ensure you saved the initial position when creating the ion
+            // e.g., ion.userData.baseX = ion.position.x;
+            const baseX = ion.userData.basePosition.x; 
+
+            if (this.isEntangling && this.selectedIndices.has(ionId)) {
+                // --- COLLECTIVE MOTION (The "Phonon Bus") ---
+                
+                // We need to determine phase. 
+                // Let's implement "Breathing Mode" (out of phase).
+                // Sort indices to ensure consistent phase assignment
+                const sortedIndices = Array.from(this.selectedIndices).sort();
+                const isFirstIon = (ionId === sortedIndices[0]);
+                
+                // Direction: First ion moves Left, Second moves Right (then swap)
+                const direction = isFirstIon ? 1 : -1;
+                
+                // Frequency: High frequency for trap oscillation
+                const frequency = 10; 
+                const amplitude = 0.3; // Large enough to see, small enough not to crash neighbors
+
+                // Apply Sine wave offset
+                ion.position.x = baseX + (Math.sin(time * frequency) * amplitude * direction);
+                
+                // Optional: Jiggle Y slightly to show energy
+                ion.position.y = (Math.sin(time * 20) * 0.05);
+
+            } else {
+                // --- THERMAL NOISE (Standard State) ---
+                
+                // Random Brownian motion (imperfect cooling)
+                // Much smaller amplitude, non-periodic
+                ion.position.x = baseX + (Math.sin(time * 3 + ionId) * 0.05);
+                ion.position.y = Math.cos(time * 2 + ionId) * 0.05;
+            }
         });
+
+        // // Idle Animation: Thermal vibration
+        // this.ions.forEach((ion, idx) => {
+        //     // Ions vibrate slightly out of phase
+        //     ion.position.y = ion.userData.basePosition.y + Math.sin(time * 5 + idx) * 0.05;
+        //     ion.position.z = ion.userData.basePosition.z + Math.cos(time * 4 + idx) * 0.05;
+        // });
 
         this.controls.update();
         // Use composer for bloom effect

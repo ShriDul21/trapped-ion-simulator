@@ -22,6 +22,7 @@ body {
     z-index: 10;
 }
 
+
 .control-group {
     display: flex;
     flex-direction: column;
@@ -42,8 +43,15 @@ button {
     transition: all 0.2s;
 }
 
-button:hover { background: #00ffcc; color: #000; }
-button:disabled { border-color: #555; color: #555; cursor: not-allowed; }
+button:hover {
+    background: #00ffcc;
+    color: #000; 
+}
+button:disabled { 
+    border-color: #555;
+    color: #555;
+    cursor: not-allowed; 
+}
 
 #info-panel {
     position: absolute;
@@ -51,4 +59,79 @@ button:disabled { border-color: #555; color: #555; cursor: not-allowed; }
     left: 20px;
     color: #00ffcc;
     pointer-events: none;
+}
+
+#state-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: #00ffcc;
+    pointer-events: none;
+}
+
+
+
+.energy-popup {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100px;
+    height: 120px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 15px;
+    pointer-events: none; /* Let clicks pass through */
+    opacity: 0; /* Hidden by default */
+    z-index: 100;
+    transform: translate(-50%, -100%); /* Center horizontally, sit above */
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.level {
+    width: 100%;
+    height: 2px;
+    background: #555;
+    position: relative;
+}
+
+.level.excited { background: #ff0044; box-shadow: 0 0 5px #ff0044; }
+.level.ground { background: #0088ff; box-shadow: 0 0 5px #0088ff; }
+
+.label {
+    position: absolute;
+    right: -25px;
+    top: -10px;
+    color: white;
+    font-family: monospace;
+    font-size: 14px;
+}
+
+/* Container for the electron movement area */
+.gap {
+    position: absolute;
+    top: 15px; /* Matches padding */
+    bottom: 15px;
+    left: 50%;
+    width: 2px;
+    /* background: rgba(255,255,255,0.1); dashed line optional */ 
+}
+
+.electron {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    left: -6px; /* Center on line */
+    box-shadow: 0 0 10px white;
+}
+
+.electron.ghost {
+    opacity: 0.5;
+    display: none; /* Only for superposition */
+    background: #aa00ff;
 }

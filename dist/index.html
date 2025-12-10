@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>Trapped Ion Quantum Simulator</title>
-    
-    <!-- Import Three.js from CDN -->
-    
-  <script type="module" crossorigin src="/assets/index-Be05C8fe.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-CE7OI7Uv.css">
+    <script id="MathJax-script" async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+
+  <script type="module" crossorigin src="/assets/index-DQ6_r8NA.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CfRwyINl.css">
 </head>
+
 <body>
     <!-- Information Overlay -->
     <div id="info-panel">
@@ -17,6 +19,12 @@
         <p>Selected Ion: <span id="selected-ion-id">None</span></p>
         <small>Click ions to select them</small>
     </div>
+
+    <div id="state-panel">
+        <h1>Basic Quantum State</h1>
+        <p> <span id="state-status">\( |0\rangle \otimes |0\rangle \otimes |0\rangle \otimes |0\rangle \otimes |0\rangle \)</span></p>
+    </div>
+
 
     <!-- Controls -->
     <div id="ui-container">
@@ -31,6 +39,19 @@
             <button id="btn-entangle" onclick="app.entangleIons()">Entangle (XX Gate)</button>
         </div>
     </div>
+    <!-- The Floating Energy Diagram -->
+    <div id="energy-popup" class="energy-popup">
+        <div class="level excited"><span class="label">|1⟩</span></div>
+        <div class="gap">
+            <!-- The electron dot -->
+            <div id="electron" class="electron"></div>
+            <!-- Trail for superposition -->
+            <div id="electron-ghost" class="electron ghost"></div>
+        </div>
+        <div class="level ground"><span class="label">|0⟩</span></div>
+    </div>
+
+
 
 </body>
 </html>
